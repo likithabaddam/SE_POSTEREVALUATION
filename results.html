@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Results</title>
+    <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+    <h2>Image Analysis Results</h2>
+
+    <h3>Font Sizes and Text</h3>
+    <table>
+        <thead>
+            <tr>
+                <th>Text</th>
+                <th>Font Size</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for text, size in text_data %}
+            <tr>
+                <td>{{ text }}</td>
+                <td>{{ size }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <h3>Image Properties</h3>
+    <ul>
+        <li>Hue: {{ hue }}</li>
+        <li>Saturation: {{ saturation }}</li>
+        <li>Contrast: {{ contrast }}</li>
+        <li>Brightness: {{ brightness }}</li>
+        <li>Darkness: {{ darkness }}</li>
+        <li>Detected Font: {{ detected_font }}</li>
+    </ul>
+
+    <h3>Spellcheck and Grammar Errors</h3>
+    <ul>
+        {% for word in misspelled %}
+        <li>Mispelled: {{ word }}</li>
+        {% endfor %}
+        {% for error in grammar_errors %}
+        <li>Error: {{ error }}</li>
+        {% endfor %}
+    </ul>
+
+    <a href="{{ url_for('index') }}">Back to Upload</a>
+</body>
+</html>
