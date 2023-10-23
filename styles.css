@@ -1,30 +1,39 @@
 /* General styling */
-body {
-    font-family: Arial, sans-serif;
-    background-color: #f4f6f9;
-    color: #333;
+html, body {
+    height: 100%;
+    width: 100%;
     margin: 0;
     padding: 0;
-    display: flex;           /* Add flex display */
-    justify-content: center; /* Center children horizontally */
-    align-items: center;     /* Center children vertically */
-    height: 100vh;           /* Take full viewport height */
+    overflow: hidden;  /* This ensures there's no unexpected scrolling */
 }
 
 
+
+body {
+    display: flex;
+    width:100%;
+    justify-content: center;
+    align-items: center;
+    font-family: Arial, sans-serif;
+    color: #333;
+    margin: 0;
+    padding: 0;
+}
+
 .container {
-    max-width: 900px;
+    max-width: 900px; 
     margin: 40px auto;
-    padding: 20px;
-    border: 1px solid #ddd;
+    padding: 20px; 
     border-radius: 10px;
     background-color: #fff;
-    box-shadow: 0px 4px 12px rgba(0, 0, 0, 0.05);
-    background-image: url('main.jpg'); /* Replace with your image path */
+    box-shadow: 0px 0px 0px rgba(0, 0, 0, 0.05);
+    background-image: url('5.jpeg');
+    background-size: cover; 
     background-repeat: no-repeat;
     background-position: center center;
     background-size: cover;
-    opacity: 0.9; 
+    opacity: 1; 
+    text-align:center;
 }
 
 h1, h2 {
