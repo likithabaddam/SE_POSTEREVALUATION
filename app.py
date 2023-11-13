@@ -1,5 +1,7 @@
 import os
 import cv2
+import re
+import requests
 import numpy as np
 import pytesseract
 from spellchecker import SpellChecker
@@ -7,42 +9,58 @@ import language_tool_python
 from PIL import ImageFont, ImageDraw, Image
 import difflib
 import werkzeug.utils
-from flask import Flask, render_template, request, redirect
+from flask import Flask, render_template, request, redirect, url_for
 from werkzeug.utils import secure_filename
-#filename = secure_filename(file.filename)
+from flask import send_file
+import pdfkit
 
 app = Flask(__name__)
+pdfkit_config = pdfkit.configuration(wkhtmltopdf='/usr/local/bin/wkhtmltopdf')
 UPLOAD_FOLDER = 'uploads/'
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
 
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 KNOWN_FONTS = ["Arial", "Times New Roman", "Verdana", "Tahoma", "Calibri"]
 
+def extract_references(text):
+    url_pattern = r'\b(?:https?://)?(?:(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+\.[a-zA-Z]{2,6}\b/?)'
+    return re.findall(url_pattern, text)
+
+def verify_links(references):
+    results = []
+    for ref in references:
+        if not ref.startswith(('http://', 'https://')):
+            ref = 'http://' + ref
+        try:
+            response = requests.head(ref, allow_redirects=True, timeout=5)
+            if response.status_code == 200:
+                results.append((ref, 'Verified'))
+            else:
+                results.append((ref, 'Not Verified'))
+        except requests.RequestException:
+            results.append((ref, 'Not Verified'))
+    return results
+
 def is_valid_file_extension(filename):
     return filename.lower().endswith(tuple(ALLOWED_EXTENSIONS))
-    
-def secure_filename(filename):
-    return werkzeug.utils.secure_filename(filename)
 
 def compute_contrast(img):
-    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    brightness = np.max(gray)
-    darkness = np.min(gray)
-    
-    contrast = brightness / (darkness + 1e-5)  
-
-    
-    return contrast, brightness, darkness
+    if len(img.shape) > 2:
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    else:
+        gray = img
+    contrast = np.std(gray)
+    return contrast
 
 def closest_font(text_from_image):
-    img = Image.new('RGB', (200, 60), color=(255, 255, 255))
+    img = Image.new('RGB', (200, 60), color = (255, 255, 255))
     d = ImageDraw.Draw(img)
     best_match = None
     highest_ratio = 0
     for font_name in KNOWN_FONTS:
         try:
             font = ImageFont.truetype(font_name + ".ttf", size=12)
-            d.text((10, 10), text_from_image, font=font, fill=(0, 0, 0))
+            d.text((10,10), text_from_image, font=font, fill=(0,0,0))
             rendered_text = pytesseract.image_to_string(img)
             match_ratio = difflib.SequenceMatcher(None, text_from_image, rendered_text).ratio()
             if match_ratio > highest_ratio:
@@ -57,82 +75,81 @@ spell = SpellChecker()
 
 @app.route('/', methods=['GET', 'POST'])
 def index():
+    hue_avg = saturation_avg = 0
     if request.method == 'POST':
-        file = request.files.get('file')
-        if not file:
-            return "No file part", 400
-        
-        if not file or not file.filename:
-            return "No file selected or file name is empty", 400
-
-        
-        if not is_valid_file_extension(file.filename):
-            return "Invalid file type or extension. Please upload a valid image file.", 400
-        if not file.content_type.startswith('image'):
-            return "Invalid file type, please upload an image.", 400
-        
-        filename = secure_filename(file.filename)
-        
-        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-        try:
+        file = request.files['file']
+        if file and is_valid_file_extension(file.filename):
+            filename = secure_filename(file.filename)
+            filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
             file.save(filepath)
-        except Exception as e:
-            return f"Failed to save file: {str(e)}", 500
-        
-        # Load the image in grayscale directly as contrast computation doesn't need color information.
-        gray_img = cv2.imread(filepath, cv2.IMREAD_GRAYSCALE)
-        contrast, brightness, darkness = compute_contrast(gray_img)
 
-        # Load a smaller version of the image for color analysis to save resources
-        small_img = cv2.resize(cv2.imread(filepath), (100, 100))  # Adjust dimensions as appropriate
-        hsv = cv2.cvtColor(small_img, cv2.COLOR_BGR2HSV)
-        hue, saturation, _ = cv2.split(hsv)
+            img = cv2.imread(filepath)
+            if img is None:
+                return "Error loading image", 500
 
-        
-        hue_avg = np.mean(hue)
-        saturation_avg = np.mean(saturation)
-        
-        height, width, _ = gray_img.shape
-        d = pytesseract.image_to_data(gray_img, output_type=pytesseract.Output.DICT)
-        
-        
-        def extract_text(data):
-            return [text for text, height in zip(data['text'], data['height']) if height != 0]
+            contrast = compute_contrast(img)
 
-        sentences = extract_text(d)
+            if len(img.shape) == 3:
+                small_img = cv2.resize(img, (100, 100))
+                hsv = cv2.cvtColor(small_img, cv2.COLOR_BGR2HSV)
+                hue, saturation, _ = cv2.split(hsv)
+                hue_avg = np.mean(hue)
+                saturation_avg = np.mean(saturation)
 
-        
-        
-        def calculate_font_size(heights, image_height):
-            return [(height / image_height) * 72 for height in heights if height != 0]
+            custom_config = r'--oem 3 --psm 11'
+            text_from_image = pytesseract.image_to_string(img, config=custom_config)
 
-        font_sizes = calculate_font_size(d['height'], height)
+            matches = tool.check(text_from_image)
+            error_details = []
+            for match in matches:
+                from_line = match.context[0:match.offset].count('\n') + 1
+                from_column = match.offset - match.context.rfind('\n', 0, match.offset)
+                error_detail = {
+                    'from_line': from_line,
+                    'from_column': from_column,
+                    'message': match.message,
+                    'replacements': match.replacements,
+                    'length': match.errorLength
+                }
+                error_details.append(error_detail)
 
-        
-        text_data = list(zip(sentences, font_sizes))
-        text_from_image = " ".join(sentences)
-        detected_font = closest_font(text_from_image)
-        
-        def get_misspelled_words(text):
-            words = text.lower().split()
-            return spell.unknown(words)
+            words = re.findall(r'\b\w+\b', text_from_image.lower())
+            misspelled = [word for word in words if spell.unknown([word])]
 
-        misspelled = get_misspelled_words(text_from_image)
+            references = extract_references(text_from_image)
+            verified_references = verify_links(references)
 
-        
-        
-        def detect_grammar_errors(text):
-            return tool.check(text)
+            d = pytesseract.image_to_data(img, output_type=pytesseract.Output.DICT)
+            sentences = [text for text, conf in zip(d['text'], d['conf']) if int(conf) > 60]
+            font_sizes = [(height / img.shape[0]) * 72 for height in d['height'] if height != 0]
+            text_data = list(zip(sentences, font_sizes))
 
-        grammar_errors = detect_grammar_errors(text_from_image)
+            detected_font = closest_font(text_from_image)
 
-        return render_template('results.html', text_data=text_data, hue=hue_avg, saturation=saturation_avg, contrast=contrast, brightness=brightness, darkness=darkness, file_type=file.content_type, misspelled=misspelled, grammar_errors=grammar_errors, detected_font=detected_font)
-
+            return render_template(
+                'results.html', 
+                text_data=text_data, 
+                hue_avg=hue_avg, 
+                saturation_avg=saturation_avg, 
+                contrast=contrast,
+                file_type=file.content_type, 
+                misspelled=misspelled, 
+                grammar_errors=matches, 
+                detected_font=detected_font, 
+                references=verified_references,
+                error_details=error_details,
+            )
     return render_template('index.html')
 
 @app.route('/suggestions')
 def suggestions():
-    return render_template('suggestions.html')
+    suggestions_data = request.args.get('suggestions', [])  # Adjust as needed for your implementation
+    return render_template('suggestions.html', suggestions=suggestions_data)
+
+@app.route('/generate_pdf', methods=['POST'])
+def generate_pdf():
+    pdfkit.from_file('templates/results.html', 'results.pdf', configuration=pdfkit_config)
+    return send_file('results.pdf', as_attachment=True)
 
 if __name__ == '__main__':
     app.run(debug=True)
