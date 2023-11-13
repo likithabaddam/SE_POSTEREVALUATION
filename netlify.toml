@@ -1,0 +1,7 @@
+[build]
+  command = "pip install -t ./lib -r requirements.txt"
+  publish = "/path/to/your/static/files"
+  functions = "/path/to/your/functions"
+
+[build.environment]
+  PYTHON_VERSION = "3.8"
