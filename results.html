@@ -7,16 +7,15 @@
     <script type="text/javascript">
         google.charts.load('current', {packages: ['corechart', 'bar']});
         google.charts.setOnLoadCallback(drawBasic);
-
+    
         function drawBasic() {
             var data = google.visualization.arrayToDataTable([
                 ['Property', 'Value',],
-                ['Hue', {{ hue }}],
-                ['Saturation', {{ saturation }}],
+                ['Hue', {{ hue_avg }}],
+                ['Saturation', {{ saturation_avg }}],
                 ['Contrast', {{ contrast }}],
-                ['Brightness', {{ brightness }}]
             ]);
-
+    
             var options = {
                 title: 'Image Properties',
                 hAxis: {
@@ -26,16 +25,40 @@
                     title: 'Value'
                 }
             };
-
+    
             var chart = new google.visualization.ColumnChart(
                 document.getElementById('chart_div')
             );
-
+    
             chart.draw(data, options);
         }
     </script>
+    
 </head>
 <body>
+    <h3>Extracted References</h3>
+    <ul>
+        {% for ref, status in references %}
+            <li><a href="{{ ref }}" target="_blank">{{ ref }}</a></li>
+        {% endfor %}
+    </ul>
+    <h3>Reference Verification Results</h3>
+    <table>
+        <thead>
+            <tr>
+                <th>Reference</th>
+                <th>Verification Status</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for ref, status in references %}
+            <tr>
+                <td><a href="{{ ref }}" target="_blank">{{ ref }}</a></td>
+                <td>{{ status }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
     <h2>Image Analysis Results</h2>
 
     <h3>Image Properties</h3>
@@ -43,37 +66,49 @@
         <tbody>
             <tr>
             <td>Hue:</td>
-            <td> {{ hue }}</td></tr>
+            <td> {{ hue_avg }}</td></tr>
             <tr>
             <td>Saturation:</td>
-            <td> {{ saturation }}</td></tr>
+            <td> {{ saturation_avg }}</td></tr>
             <tr>
             <td>Contrast:</td>
             <td> {{ contrast }}</td></tr>
-            <tr>
-            <td>Brightness:</td>
-            <td> {{ brightness }}</td></tr>
-            <tr>
-            <td>Darkness:</td>
-            <td> {{ darkness }}</td></tr>
             <tr>
             <td>Detected Font:</td>
             <td> {{ detected_font }} </td></tr>
         </tbody>
     </table>
     <h3>Image Properties Visualization</h3>
-    <div id="chart_div" style="width: 600px; height: 400px; text-align: centre;"></div>
+    
+    <aside id="chart_div" style="width: 600px; height: 400px; text-align: centre;"></aside>
 
     <h3>Spellcheck and Grammar Errors</h3>
     <ul>
         {% for word in misspelled %}
         <li>Mispelled: {{ word }}</li>
         {% endfor %}
-        <h3> ERRORS AND SUGGESTIONS</h3>
-        {% for error in grammar_errors %}
         
-        <li>Error: {{ error }}</li>
+<h3>Errors and Suggestions</h3>
+<table>
+    <thead>
+        <tr>
+            <th>Line</th>
+            <th>Column</th>
+            <th>Error</th>
+            <th>Suggestions</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for error in error_details %}
+        <tr>
+            <td>{{ error.from_line }}</td>
+            <td>{{ error.from_column }}</td>
+            <td>{{ error.message }}</td>
+            <td>{{ error.replacements }}</td>
+        </tr>
         {% endfor %}
+    </tbody>
+</table>
     </ul>
 
     <h3>Font Sizes and Text</h3>
@@ -93,6 +128,9 @@
             {% endfor %}
         </tbody>
     </table>
+    <form method="POST" action="/generate_pdf">
+        <button type="submit">Download PDF</button>
+    </form>
     <a href="{{ url_for('index') }}">Back to Upload</a>
 </body>
 </html>
