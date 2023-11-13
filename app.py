@@ -3,6 +3,7 @@ import cv2
 import re
 import requests
 import numpy as np
+from flask_lambda import FlaskLambda
 import pytesseract
 from spellchecker import SpellChecker
 import language_tool_python
