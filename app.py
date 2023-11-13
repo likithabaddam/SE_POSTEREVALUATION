@@ -139,7 +139,7 @@ def index():
                 references=verified_references,
                 error_details=error_details,
             )
-    return render_template('index.html')
+    return render_template('https://comfy-alpaca-2b6b0c.netlify.app/')
 
 @app.route('/suggestions')
 def suggestions():
